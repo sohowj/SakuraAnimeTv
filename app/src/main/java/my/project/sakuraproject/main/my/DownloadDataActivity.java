@@ -11,12 +11,20 @@ import android.widget.PopupMenu;
 import android.widget.ProgressBar;
 import android.widget.TextView;
 
+import androidx.appcompat.app.AlertDialog;
+import androidx.appcompat.widget.Toolbar;
+import androidx.recyclerview.widget.GridLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
+import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
+
 import com.alibaba.fastjson.JSONObject;
 import com.arialyy.annotations.Download;
 import com.arialyy.aria.core.Aria;
 import com.arialyy.aria.core.download.DownloadEntity;
 import com.arialyy.aria.core.task.DownloadTask;
 import com.chad.library.adapter.base.BaseQuickAdapter;
+import com.google.android.material.checkbox.MaterialCheckBox;
+import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.r0adkll.slidr.Slidr;
 
 import org.greenrobot.eventbus.EventBus;
@@ -28,12 +36,6 @@ import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
 
-import androidx.appcompat.app.AlertDialog;
-import androidx.appcompat.widget.AppCompatCheckBox;
-import androidx.appcompat.widget.Toolbar;
-import androidx.recyclerview.widget.GridLayoutManager;
-import androidx.recyclerview.widget.RecyclerView;
-import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 import butterknife.BindView;
 import my.project.sakuraproject.R;
 import my.project.sakuraproject.adapter.DownloadDataListAdapter;
@@ -48,7 +50,6 @@ import my.project.sakuraproject.main.base.BaseActivity;
 import my.project.sakuraproject.main.player.LocalPlayerActivity;
 import my.project.sakuraproject.util.SwipeBackLayoutUtil;
 import my.project.sakuraproject.util.Utils;
-import my.project.sakuraproject.util.VideoUtils;
 
 public class DownloadDataActivity extends BaseActivity<DownloadDataContract.View, DownloadDataPresenter> implements DownloadDataContract.View {
     @BindView(R.id.rv_list)
@@ -185,14 +186,14 @@ public class DownloadDataActivity extends BaseActivity<DownloadDataContract.View
             }
         }, 500), mRecyclerView);
         mRecyclerView.setAdapter(adapter);
-        setRecyclerViewView();
     }
 
     private void showDeleteDataDialog(DownloadDataBean bean, int position) {
         AlertDialog alertDialog;
-        AlertDialog.Builder builder = new AlertDialog.Builder(this, R.style.DialogStyle);
+        MaterialAlertDialogBuilder builder = new MaterialAlertDialogBuilder(this, R.style.DialogStyle);
         View view = LayoutInflater.from(this).inflate(R.layout.dialog_remove_download, null);
-        AppCompatCheckBox checkBox = view.findViewById(R.id.remove_file_select);
+        MaterialCheckBox checkBox = view.findViewById(R.id.remove_file_select);
+        builder.setTitle(Utils.getString(R.string.other_operation));
         builder.setPositiveButton(Utils.getString(R.string.page_positive), (dialog, which) -> deleteData(checkBox.isChecked(), bean, position));
         builder.setNegativeButton(Utils.getString(R.string.page_negative), (dialog, which) -> dialog.dismiss());
         alertDialog = builder.setView(view).create();
@@ -342,6 +343,10 @@ public class DownloadDataActivity extends BaseActivity<DownloadDataContract.View
         runOnUiThread(() -> {
             if (isMain) {
                 downloadDataBeans = list;
+                if (downloadDataBeans.size() >0)
+                    setRecyclerViewView();
+                else
+                    setRecyclerViewEmpty();
                 adapter.setNewData(downloadDataBeans);
             } else
                 adapter.addData(list);
@@ -408,12 +413,6 @@ public class DownloadDataActivity extends BaseActivity<DownloadDataContract.View
                 }
             }
         }, 1000);
-    }
-
-    @Override
-    public void onResume() {
-        super.onResume();
-        if (Utils.isPad()) setRecyclerViewView();
     }
 
     @Override

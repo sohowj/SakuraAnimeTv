@@ -8,6 +8,11 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ProgressBar;
 
+import androidx.appcompat.widget.PopupMenu;
+import androidx.coordinatorlayout.widget.CoordinatorLayout;
+import androidx.recyclerview.widget.GridLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
+
 import com.chad.library.adapter.base.BaseQuickAdapter;
 
 import org.greenrobot.eventbus.Subscribe;
@@ -16,10 +21,6 @@ import org.greenrobot.eventbus.ThreadMode;
 import java.util.ArrayList;
 import java.util.List;
 
-import androidx.appcompat.widget.PopupMenu;
-import androidx.coordinatorlayout.widget.CoordinatorLayout;
-import androidx.recyclerview.widget.GridLayoutManager;
-import androidx.recyclerview.widget.RecyclerView;
 import butterknife.BindView;
 import butterknife.ButterKnife;
 import my.project.sakuraproject.R;
@@ -143,7 +144,6 @@ public class FavoriteFragment extends MyLazyFragment<FavoriteContract.View, Favo
         isMain = true;
         favoriteList.clear();
         adapter.setNewData(favoriteList);
-        setRecyclerViewView();
         loading.setVisibility(View.VISIBLE);
         if (favoriteCount > 0 && updateOrder) {
 //            application.showSnackbarMsg(msg, Utils.getString(R.string.check_favorite_update));
@@ -178,6 +178,10 @@ public class FavoriteFragment extends MyLazyFragment<FavoriteContract.View, Favo
             if (isMain) {
                 loading.setVisibility(View.GONE);
                 favoriteList = list;
+                if (favoriteList.size() > 0)
+                    setRecyclerViewView();
+                else
+                    setRecyclerViewEmpty();
                 adapter.setNewData(favoriteList);
             } else
                 adapter.addData(list);
@@ -252,13 +256,6 @@ public class FavoriteFragment extends MyLazyFragment<FavoriteContract.View, Favo
         if (refresh.getIndex() == 1) {
             loadFavoriteData();
         }
-    }
-
-    @Override
-    public void onResume() {
-        super.onResume();
-        if (isFragmentVisible && Utils.isPad())
-            setRecyclerViewView();
     }
 
     @Override

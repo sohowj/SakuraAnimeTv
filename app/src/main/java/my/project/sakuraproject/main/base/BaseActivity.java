@@ -13,15 +13,15 @@ import android.view.View;
 import android.view.WindowManager;
 import android.widget.TextView;
 
-import java.util.List;
-
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.app.AppCompatDelegate;
 
-import javax.net.ssl.HttpsURLConnection;
+import com.google.android.material.dialog.MaterialAlertDialogBuilder;
+
+import java.util.List;
 
 import butterknife.ButterKnife;
 import butterknife.Unbinder;
@@ -29,7 +29,6 @@ import my.project.sakuraproject.R;
 import my.project.sakuraproject.application.Sakura;
 import my.project.sakuraproject.custom.CustomToast;
 import my.project.sakuraproject.database.DatabaseUtil;
-import my.project.sakuraproject.util.CropUtil;
 import my.project.sakuraproject.util.StatusBarUtil;
 import my.project.sakuraproject.util.Utils;
 import pub.devrel.easypermissions.EasyPermissions;
@@ -241,7 +240,7 @@ public abstract class BaseActivity<V, P extends Presenter<V>> extends AppCompatA
 
     private void getManager() {
         AlertDialog alertDialog;
-        AlertDialog.Builder builder = new AlertDialog.Builder(this, R.style.DialogStyle);
+        MaterialAlertDialogBuilder builder = new MaterialAlertDialogBuilder(this, R.style.DialogStyle);
         builder.setPositiveButton(Utils.getString(R.string.authorize_msg), null);
         builder.setTitle(Utils.getString(R.string.authorize_title_msg));
         builder.setMessage(Utils.getString(R.string.file_manger_msg));

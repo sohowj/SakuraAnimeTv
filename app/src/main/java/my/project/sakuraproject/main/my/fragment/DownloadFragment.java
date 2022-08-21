@@ -10,12 +10,18 @@ import android.view.ViewGroup;
 import android.widget.ProgressBar;
 import android.widget.TextView;
 
-import com.alibaba.fastjson.JSONObject;
+import androidx.appcompat.app.AlertDialog;
+import androidx.appcompat.widget.PopupMenu;
+import androidx.coordinatorlayout.widget.CoordinatorLayout;
+import androidx.recyclerview.widget.GridLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
+
 import com.arialyy.annotations.Download;
 import com.arialyy.aria.core.Aria;
 import com.arialyy.aria.core.download.DownloadEntity;
 import com.arialyy.aria.core.task.DownloadTask;
 import com.chad.library.adapter.base.BaseQuickAdapter;
+import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 
 import org.greenrobot.eventbus.Subscribe;
 import org.greenrobot.eventbus.ThreadMode;
@@ -23,11 +29,6 @@ import org.greenrobot.eventbus.ThreadMode;
 import java.util.ArrayList;
 import java.util.List;
 
-import androidx.appcompat.app.AlertDialog;
-import androidx.appcompat.widget.PopupMenu;
-import androidx.coordinatorlayout.widget.CoordinatorLayout;
-import androidx.recyclerview.widget.GridLayoutManager;
-import androidx.recyclerview.widget.RecyclerView;
 import butterknife.BindView;
 import butterknife.ButterKnife;
 import my.project.sakuraproject.R;
@@ -48,7 +49,6 @@ import my.project.sakuraproject.main.my.UpdateImgContract;
 import my.project.sakuraproject.main.my.UpdateImgPresenter;
 import my.project.sakuraproject.services.DownloadService;
 import my.project.sakuraproject.util.Utils;
-import my.project.sakuraproject.util.VideoUtils;
 
 public class DownloadFragment extends MyLazyFragment<DownloadContract.View, DownloadPresenter> implements DownloadContract.View, UpdateImgContract.View {
     @BindView(R.id.rv_list)
@@ -145,7 +145,6 @@ public class DownloadFragment extends MyLazyFragment<DownloadContract.View, Down
         }, 500), mRecyclerView);
         if (Utils.checkHasNavigationBar(getActivity())) mRecyclerView.setPadding(0,0,0, Utils.getNavigationBarHeight(getActivity()));
         mRecyclerView.setAdapter(adapter);
-        setRecyclerViewView();
     }
 
     public void setLoadState(boolean loadState) {
@@ -156,7 +155,6 @@ public class DownloadFragment extends MyLazyFragment<DownloadContract.View, Down
     private void loadDownloadData() {
         isMain = true;
         downloadList.clear();
-        setRecyclerViewView();
         mPresenter = createPresenter();
         loadData();
     }
@@ -223,6 +221,10 @@ public class DownloadFragment extends MyLazyFragment<DownloadContract.View, Down
             if (isMain) {
                 loading.setVisibility(View.GONE);
                 downloadList = list;
+                if (downloadList.size() > 0)
+                    setRecyclerViewView();
+                else
+                    setRecyclerViewEmpty();
                 adapter.setNewData(downloadList);
             } else
                 adapter.addData(list);
@@ -263,7 +265,7 @@ public class DownloadFragment extends MyLazyFragment<DownloadContract.View, Down
         List<DownloadEntity> list = Aria.download(this).getAllNotCompleteTask();
         if (list != null && list.size() > 0) {
             AlertDialog alertDialog;
-            AlertDialog.Builder builder = new AlertDialog.Builder(getActivity(), R.style.DialogStyle);
+            MaterialAlertDialogBuilder builder = new MaterialAlertDialogBuilder(getActivity(), R.style.DialogStyle);
             builder.setMessage(String.format("你有%s个未完成的下载任务，是否继续下载？", list.size()+""));
             builder.setPositiveButton(Utils.getString(R.string.download_positive), (dialog, which) -> getActivity().startService(new Intent(getContext(), DownloadService.class)));
             builder.setNegativeButton(Utils.getString(R.string.download_negative), (dialog, which) -> dialog.dismiss());
@@ -272,13 +274,6 @@ public class DownloadFragment extends MyLazyFragment<DownloadContract.View, Down
             alertDialog = builder.create();
             alertDialog.show();
         }
-    }
-
-    @Override
-    public void onResume() {
-        super.onResume();
-        if (isFragmentVisible && Utils.isPad())
-            setRecyclerViewView();
     }
 
     @Override

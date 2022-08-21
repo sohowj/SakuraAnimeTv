@@ -7,12 +7,22 @@ import android.os.Environment;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
-import android.view.ViewGroup;
+import android.widget.ArrayAdapter;
+import android.widget.AutoCompleteTextView;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.RelativeLayout;
 import android.widget.TextView;
 import android.widget.Toast;
+
+import androidx.appcompat.app.AlertDialog;
+import androidx.appcompat.widget.AppCompatTextView;
+import androidx.core.content.ContextCompat;
+import androidx.core.widget.NestedScrollView;
+import androidx.recyclerview.widget.GridLayoutManager;
+import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
+import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 
 import com.alibaba.fastjson.JSONObject;
 import com.arialyy.aria.core.Aria;
@@ -26,6 +36,7 @@ import com.bumptech.glide.request.RequestOptions;
 import com.bumptech.glide.request.transition.DrawableCrossFadeFactory;
 import com.chad.library.adapter.base.BaseQuickAdapter;
 import com.ctetin.expandabletextviewlibrary.ExpandableTextView;
+import com.google.android.material.bottomappbar.BottomAppBar;
 import com.google.android.material.bottomsheet.BottomSheetBehavior;
 import com.google.android.material.bottomsheet.BottomSheetDialog;
 import com.google.android.material.button.MaterialButton;
@@ -42,15 +53,6 @@ import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
 
-import androidx.appcompat.app.AlertDialog;
-import androidx.appcompat.widget.AppCompatTextView;
-import androidx.coordinatorlayout.widget.CoordinatorLayout;
-import androidx.core.content.ContextCompat;
-import androidx.core.widget.NestedScrollView;
-import androidx.recyclerview.widget.GridLayoutManager;
-import androidx.recyclerview.widget.LinearLayoutManager;
-import androidx.recyclerview.widget.RecyclerView;
-import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 import butterknife.BindView;
 import butterknife.OnClick;
 import co.lujun.androidtagview.TagContainerLayout;
@@ -65,6 +67,7 @@ import my.project.sakuraproject.api.Api;
 import my.project.sakuraproject.bean.AnimeDescDetailsBean;
 import my.project.sakuraproject.bean.AnimeDescListBean;
 import my.project.sakuraproject.bean.AnimeDescRecommendBean;
+import my.project.sakuraproject.bean.AnimeDramasBean;
 import my.project.sakuraproject.bean.AnimeListBean;
 import my.project.sakuraproject.bean.DownloadDramaBean;
 import my.project.sakuraproject.bean.Event;
@@ -130,13 +133,12 @@ public class DescActivity extends BaseActivity<DescContract.View, DescPresenter>
     LinearLayout recommendLinearLayout;
     @BindView(R.id.error_msg)
     TextView error_msg;
-    @BindView(R.id.msg)
-    CoordinatorLayout msg;
     private RecyclerView lineRecyclerView;
     private AnimeDescDetailsAdapter animeDescDetailsAdapter;
     private AnimeDescRecommendAdapter animeDescRecommendAdapter;
     private AnimeDescRecommendAdapter animeDescMultiAdapter;
     private AnimeDescListBean animeDescListBean = new AnimeDescListBean();
+    private List<AnimeDescDetailsBean> dramaList; // 剧集列表
     private ImageView closeDrama;
     private BottomSheetDialog mBottomSheetDialog;
     private AnimeDescDramaAdapter animeDescDramaAdapter;
@@ -144,8 +146,6 @@ public class DescActivity extends BaseActivity<DescContract.View, DescPresenter>
     LinearLayout desc_view;
     @BindView(R.id.bg)
     ImageView bg;
-    @BindView(R.id.favorite)
-    MaterialButton favorite;
     @BindView(R.id.tag_view)
     TagContainerLayout tagContainerLayout;
     @BindView(R.id.update_time)
@@ -158,8 +158,8 @@ public class DescActivity extends BaseActivity<DescContract.View, DescPresenter>
     private int clickIndex; // 当前点击剧集
     // 番剧ID
     private String animeId;
-    @BindView(R.id.download)
-    FloatingActionButton downloadView;
+    @BindView(R.id.to_back)
+    FloatingActionButton toBackView;
     private SlidrInterface slidrInterface;
     // 下载
     private String savePath; // 下载保存路劲
@@ -174,6 +174,14 @@ public class DescActivity extends BaseActivity<DescContract.View, DescPresenter>
     List<String> urls; // 保存
     List<String> dramaNames;
     private M3U8VodOption m3U8VodOption; // 下载m3u8配置
+
+    @BindView(R.id.selected_text)
+    AutoCompleteTextView selectedDrama;
+    private List<String> dramaTitles;
+    private ArrayAdapter dramaTitlesApter;
+
+    @BindView(R.id.bottomAppBar)
+    BottomAppBar bottomAppBar;
 
     @Override
     protected DescPresenter createPresenter() {
@@ -196,12 +204,10 @@ public class DescActivity extends BaseActivity<DescContract.View, DescPresenter>
         StatusBarUtil.setColorForSwipeBack(this, getResources().getColor(R.color.colorPrimaryDark), 0);
         if (isDarkTheme) bg.setVisibility(View.GONE);
         slidrInterface = Slidr.attach(this, Utils.defaultInit());
-        CoordinatorLayout.LayoutParams params = (CoordinatorLayout.LayoutParams) msg.getLayoutParams();
-        params.setMargins(10, 0, 10, 0);
         scrollView.getViewTreeObserver().addOnScrollChangedListener(() -> mSwipe.setEnabled(scrollView.getScrollY() == 0));
         desc.setNeedExpend(true);
         getBundle();
-        initFab();
+        initBottomAppBar();
         initSwipe();
         initAdapter();
         initTagClick();
@@ -221,15 +227,23 @@ public class DescActivity extends BaseActivity<DescContract.View, DescPresenter>
         }
     }
 
-    public void initFab() {
-        if (Utils.checkHasNavigationBar(this)) {
-            ViewGroup.MarginLayoutParams params = (ViewGroup.MarginLayoutParams) downloadView.getLayoutParams();
-            params.setMargins(Utils.dpToPx(this, 16),
-                    Utils.dpToPx(this, 16),
-                    Utils.dpToPx(this, 16),
-                    Utils.getNavigationBarHeight(this) + 15);
-            downloadView.setLayoutParams(params);
-        }
+    public void initBottomAppBar() {
+        bottomAppBar.setOnMenuItemClickListener(item -> {
+            switch (item.getItemId()) {
+                case R.id.favorite:
+                    favoriteAnime();
+                    break;
+                case R.id.download:
+                    checkHasDownload();
+                    downloadBottomSheetDialog.getBehavior().setState(BottomSheetBehavior.STATE_EXPANDED);
+                    downloadBottomSheetDialog.show();
+                    break;
+                case R.id.browser:
+                    Utils.viewInChrome(this, BaseModel.getDomain(isImomoe) + sakuraUrl);
+                    break;
+            }
+            return true;
+        });
     }
 
     public void initSwipe() {
@@ -243,7 +257,7 @@ public class DescActivity extends BaseActivity<DescContract.View, DescPresenter>
 
     @SuppressLint("RestrictedApi")
     public void initAdapter() {
-        animeDescDetailsAdapter = new AnimeDescDetailsAdapter(this, animeDescListBean.getAnimeDescDetailsBeans());
+        animeDescDetailsAdapter = new AnimeDescDetailsAdapter(this, dramaList);
         animeDescDetailsAdapter.setOnItemClickListener((adapter, view, position) -> {
             if (!Utils.isFastClick()) return;
             playVideo(adapter, position, detailsRv);
@@ -432,21 +446,16 @@ public class DescActivity extends BaseActivity<DescContract.View, DescPresenter>
         }
     }
 
-    @OnClick({R.id.browser})
-    public void openBrowser() {
-        Utils.viewInChrome(this, BaseModel.getDomain(isImomoe) + sakuraUrl);
-    }
-
     @SuppressLint("RestrictedApi")
     public void openAnimeDesc() {
-        downloadView.setVisibility(View.GONE);
+//        downloadView.setVisibility(View.GONE);
         animeImg.setImageDrawable(getDrawable(isDarkTheme ? R.drawable.loading_night : R.drawable.loading_light));
         hideView(tagContainerLayout);
         tagContainerLayout.setTags("");
         hideView(score_view);
         setTextviewEmpty(desc);
         animeDescListBean = new AnimeDescListBean();
-        hideView(favorite);
+        hideViewInvisible(bottomAppBar);
         bg.setImageDrawable(getResources().getDrawable(R.drawable.default_bg));
         mPresenter = new DescPresenter(sakuraUrl, this);
         mPresenter.loadData(true);
@@ -463,9 +472,9 @@ public class DescActivity extends BaseActivity<DescContract.View, DescPresenter>
         clickIndex = position;
         int playSource = 0;
         String playNumber;
-        animeDescListBean.getAnimeDescDetailsBeans().get(position).setSelected(true);
-        dramaUrl = animeDescListBean.getAnimeDescDetailsBeans().get(position).getUrl();
-        playNumber = animeDescListBean.getAnimeDescDetailsBeans().get(position).getTitle();
+        dramaList.get(position).setSelected(true);
+        dramaUrl = dramaList.get(position).getUrl();
+        playNumber = dramaList.get(position).getTitle();
         witchTitle = animeTitle + " - " + playNumber;
         animeDescDetailsAdapter.notifyDataSetChanged();
         animeDescDramaAdapter.notifyDataSetChanged();
@@ -483,7 +492,7 @@ public class DescActivity extends BaseActivity<DescContract.View, DescPresenter>
         switch ((Integer) SharedPreferencesUtils.getParam(getApplicationContext(), "player", 0)) {
             case 0:
                 //调用播放器
-                VideoUtils.openPlayer(true, this, witchTitle, animeUrl, animeTitle, dramaUrl, animeDescListBean.getAnimeDescDetailsBeans(), clickIndex, animeId, isImomoe);
+                VideoUtils.openPlayer(true, this, witchTitle, animeUrl, animeTitle, dramaUrl, dramaList, clickIndex, animeId, isImomoe);
                 break;
             case 1:
                 Utils.selectVideoPlayer(this, animeUrl);
@@ -506,9 +515,9 @@ public class DescActivity extends BaseActivity<DescContract.View, DescPresenter>
 
     public void favoriteAnime() {
         isFavorite = DatabaseUtil.favorite(animeListBean, animeId);
-        favorite.setIcon(ContextCompat.getDrawable(this, isFavorite ? R.drawable.baseline_favorite_white_48dp : R.drawable.baseline_favorite_border_white_48dp));
-        favorite.setText(isFavorite ? Utils.getString(R.string.has_favorite) : Utils.getString(R.string.favorite));
-        application.showSnackbarMsg(msg, isFavorite ? Utils.getString(R.string.join_ok) : Utils.getString(R.string.join_error));
+        bottomAppBar.getMenu().getItem(0).setIcon(ContextCompat.getDrawable(this, isFavorite ? R.drawable.baseline_favorite_white_48dp : R.drawable.baseline_favorite_border_white_48dp));
+        bottomAppBar.getMenu().getItem(0).setTitle(isFavorite ? Utils.getString(R.string.has_favorite) : Utils.getString(R.string.favorite));
+        application.showSnackbarMsg(bottomAppBar, isFavorite ? Utils.getString(R.string.join_ok) : Utils.getString(R.string.join_error), toBackView);
         EventBus.getDefault().post(new Refresh(1));
     }
 
@@ -539,7 +548,7 @@ public class DescActivity extends BaseActivity<DescContract.View, DescPresenter>
             showView(tagContainerLayout);
         }else
             hideView(tagContainerLayout);
-        if (animeListBean.getDesc().isEmpty())
+        if (animeListBean.getDesc() == null || animeListBean.getDesc().isEmpty())
             hideView(desc);
         else {
             desc.setContent(animeListBean.getDesc());
@@ -552,18 +561,8 @@ public class DescActivity extends BaseActivity<DescContract.View, DescPresenter>
         }
     }
 
-    /*@OnClick(R.id.spinner)
-    public void showMenu() {
-        showPopupMenu();
-    }*/
-
-    @OnClick(R.id.favorite)
-    public void setFavorite() {
-        favoriteAnime();
-    }
-
-    @OnClick(R.id.exit)
-    public void exit() {
+    @OnClick(R.id.to_back)
+    public void back() {
         finish();
     }
 
@@ -579,8 +578,8 @@ public class DescActivity extends BaseActivity<DescContract.View, DescPresenter>
     public void showLoadErrorView(String msg) {
         runOnUiThread(() -> {
             if (!mActivityFinish) {
-                downloadView.setVisibility(View.GONE);
                 mSwipe.setRefreshing(false);
+                hideViewInvisible(bottomAppBar);
                 hideView(desc_view);
                 hideView(playLinearLayout);
                 hideView(multiLinearLayout);
@@ -589,6 +588,10 @@ public class DescActivity extends BaseActivity<DescContract.View, DescPresenter>
                 showView(errorBg);
             }
         });
+    }
+    private void hideViewInvisible(View view) {
+        Utils.fadeOut(view);
+        view.setVisibility(View.INVISIBLE);
     }
 
     private void hideView(View view) {
@@ -604,8 +607,7 @@ public class DescActivity extends BaseActivity<DescContract.View, DescPresenter>
     @Override
     public void showEmptyVIew() {
         mSwipe.setRefreshing(true);
-        downloadView.setVisibility(View.GONE);
-        hideView(favorite);
+        hideViewInvisible(bottomAppBar);
         hideView(desc_view);
         hideView(playLinearLayout);
         hideView(multiLinearLayout);
@@ -624,27 +626,26 @@ public class DescActivity extends BaseActivity<DescContract.View, DescPresenter>
             if (!mActivityFinish) {
                 /*if (!isImomoe)
                     downloadView.setVisibility(View.VISIBLE);*/
-                downloadView.setVisibility(View.VISIBLE);
                 setCollapsingToolbar();
                 mSwipe.setRefreshing(false);
                 if (isFavorite) DatabaseUtil.updateFavorite(animeListBean, animeId);
                 animeDescListBean = bean;
                 downloadBean = new ArrayList<>();
-                animeDescDetailsAdapter.setNewData(animeDescListBean.getAnimeDescDetailsBeans());
-                for (AnimeDescDetailsBean b : animeDescListBean.getAnimeDescDetailsBeans()) {
-                    DownloadDramaBean downloadDramaBean = new DownloadDramaBean();
-                    downloadDramaBean.setTitle(b.getTitle());
-                    downloadDramaBean.setSelected(false);
-                    downloadDramaBean.setUrl(b.getUrl());
-                    downloadBean.add(downloadDramaBean);
+                // 默认展示第一播放源
+                dramaList = animeDescListBean.getAnimeDramasBeans().get(0).getAnimeDescDetailsBeanList();
+                dramaTitles = new ArrayList<>();
+                for (AnimeDramasBean animeDramasBean : animeDescListBean.getAnimeDramasBeans()) {
+                    dramaTitles.add(animeDramasBean.getListTitle());
                 }
+                initTitleAdapter();
+                setAdapterData(0);
                 if (bean.getAnimeDescMultiBeans().size() > 0)
                     showView(multiLinearLayout);
                 else
                     hideView(multiLinearLayout);
                 animeDescMultiAdapter.setNewData(bean.getAnimeDescMultiBeans());
                 animeDescRecommendAdapter.setNewData(bean.getAnimeDescRecommendBeans());
-                setAnimeDescDramaAdapter(0);
+                showView(bottomAppBar);
                 showView(desc_view);
                 showView(playLinearLayout);
                 showView(recommendLinearLayout);
@@ -652,12 +653,36 @@ public class DescActivity extends BaseActivity<DescContract.View, DescPresenter>
         });
     }
 
+    private void initTitleAdapter() {
+        selectedDrama.setText(dramaTitles.get(0));
+        dramaTitlesApter = new ArrayAdapter(this, R.layout.list_item, dramaTitles);
+        selectedDrama.setAdapter(dramaTitlesApter);
+        selectedDrama.setOnItemClickListener((parent, view, position, id) -> {
+            setAdapterData(position);
+        });
+    }
+
+    private void setAdapterData(int position) {
+        dramaList = animeDescListBean.getAnimeDramasBeans().get(position).getAnimeDescDetailsBeanList();
+        animeDescDetailsAdapter.setNewData(dramaList);
+        animeDescDetailsAdapter.setNewData(dramaList);
+        downloadBean = new ArrayList<>();
+        for (AnimeDescDetailsBean b : dramaList) {
+            DownloadDramaBean downloadDramaBean = new DownloadDramaBean();
+            downloadDramaBean.setTitle(b.getTitle());
+            downloadDramaBean.setSelected(false);
+            downloadDramaBean.setUrl(b.getUrl());
+            downloadBean.add(downloadDramaBean);
+        }
+        setAnimeDescDramaAdapter(0);
+    }
+
     private void setAnimeDescDramaAdapter(int sourceIndex) {
-        if (animeDescListBean.getAnimeDescDetailsBeans().size() > 4)
+        if (dramaList.size() > 4)
             showView(openDrama);
         else
             hideView(openDrama);
-        animeDescDramaAdapter.setNewData(animeDescListBean.getAnimeDescDetailsBeans());
+        animeDescDramaAdapter.setNewData(dramaList);
         downloadAdapter.setNewData(downloadBean);
     }
 
@@ -673,11 +698,8 @@ public class DescActivity extends BaseActivity<DescContract.View, DescPresenter>
         isFavorite = is;
         runOnUiThread(() -> {
             if (!mActivityFinish) {
-                if (!favorite.isShown()) {
-                    favorite.setIcon(ContextCompat.getDrawable(this, isFavorite ? R.drawable.baseline_favorite_white_48dp : R.drawable.baseline_favorite_border_white_48dp));
-                    favorite.setText(isFavorite ? Utils.getString(R.string.has_favorite) : Utils.getString(R.string.favorite));
-                    showView(favorite);
-                }
+                bottomAppBar.getMenu().getItem(0).setIcon(ContextCompat.getDrawable(this, isFavorite ? R.drawable.baseline_favorite_white_48dp : R.drawable.baseline_favorite_border_white_48dp));
+                bottomAppBar.getMenu().getItem(0).setTitle(isFavorite ? Utils.getString(R.string.has_favorite) : Utils.getString(R.string.favorite));
             }
         });
     }
@@ -689,6 +711,7 @@ public class DescActivity extends BaseActivity<DescContract.View, DescPresenter>
                 mSwipe.setRefreshing(false);
                 setCollapsingToolbar();
                 showView(desc_view);
+                showView(bottomAppBar);
                 hideView(playLinearLayout);
                 hideView(multiLinearLayout);
                 hideView(recommendLinearLayout);
@@ -780,22 +803,12 @@ public class DescActivity extends BaseActivity<DescContract.View, DescPresenter>
     @Subscribe(threadMode = ThreadMode.MAIN)
     public void onEvent(Event event) {
         clickIndex = event.getClickIndex();
-        animeDescListBean.getAnimeDescDetailsBeans().get(clickIndex).setSelected(true);
+        dramaList.get(clickIndex).setSelected(true);
         animeDescDetailsAdapter.notifyDataSetChanged();
         animeDescDramaAdapter.notifyDataSetChanged();
     }
 
     /****************************************** 下载相关 ******************************************/
-    /**
-     * 显示downloadBottomSheetDialog
-     */
-    @OnClick(R.id.download)
-    public void download() {
-        checkHasDownload();
-        downloadBottomSheetDialog.getBehavior().setState(BottomSheetBehavior.STATE_EXPANDED);
-        downloadBottomSheetDialog.show();
-    }
-
     /**
      * 下载配置
      */

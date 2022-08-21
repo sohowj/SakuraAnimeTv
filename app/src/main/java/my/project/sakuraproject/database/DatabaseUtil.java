@@ -8,6 +8,7 @@ import android.os.Environment;
 import android.util.Log;
 import android.widget.Toast;
 
+import androidx.annotation.NonNull;
 
 import com.arialyy.aria.core.Aria;
 
@@ -19,7 +20,6 @@ import java.util.Date;
 import java.util.List;
 import java.util.UUID;
 
-import androidx.annotation.NonNull;
 import my.project.sakuraproject.application.Sakura;
 import my.project.sakuraproject.bean.AnimeListBean;
 import my.project.sakuraproject.bean.AnimeUpdateInfoBean;
@@ -323,6 +323,18 @@ public class DatabaseUtil {
      * @return
      */
     public static String queryAllIndex(String animeId) {
+        Cursor cursor = db.rawQuery("select F_ID, F_DESC_URL from T_HISTORY WHERE F_LINK_ID = ? AND F_DESC_URL LIKE '%voddetail%'", new String[]{animeId});
+        if (cursor.getCount() > 0) {
+            while (cursor.moveToNext()) {
+                String id = cursor.getString(0);
+                String descNumber = cursor.getString(1).replaceAll("/voddetail/|.html", "");
+                // 删除错误的数据
+                db.execSQL("DELETE FROM T_HISTORY_DATA WHERE F_LINK_ID = ? AND F_PLAY_URL NOT LIKE '%"+descNumber+"%'", new String[] {
+                        id
+                });
+            }
+        }
+        cursor.close();
         StringBuffer buffer = new StringBuffer();
         String Query = "select t2.F_PLAY_URL from T_HISTORY t1 INNER JOIN T_HISTORY_DATA t2 ON t1.F_ID = t2.F_LINK_ID where t1.F_LINK_ID =?";
         Cursor c = db.rawQuery(Query, new String[]{animeId});
@@ -617,7 +629,19 @@ public class DatabaseUtil {
      */
     public static List<HistoryBean> queryAllHistory(int limit, int offset) {
         List<HistoryBean> historyBeans = new ArrayList<>();
-        Cursor historyCursor = db.rawQuery("select t2.F_ID F_ANIME_ID, t1.F_ID, t2.F_TITLE, t1.F_DESC_URL, t2.F_SOURCE, t1.F_IMG_URL, t1.F_UPDATE_TIME " +
+        // 隐藏错误的历史记录
+        Cursor historyCursor = db.rawQuery("select t1.F_ID, COUNT(t2.F_ID) from T_HISTORY t1 \n" +
+                "left join T_HISTORY_DATA t2 on t1.F_ID = t2.F_LINK_ID\n" +
+                "where t1.F_VISIBLE = 1 \n" +
+                "GROUP BY t1.F_ID", null);
+        while (historyCursor.moveToNext()) {
+            String historyId = historyCursor.getString(0);
+            int count = historyCursor.getInt(1);
+            if (count == 0) {
+                db.execSQL("update T_HISTORY set F_VISIBLE = 0 where F_ID = ? ", new String[]{historyId}); // 当字表数据不存在时隐藏该历史记录
+            }
+        }
+        historyCursor = db.rawQuery("select t2.F_ID F_ANIME_ID, t1.F_ID, t2.F_TITLE, t1.F_DESC_URL, t2.F_SOURCE, t1.F_IMG_URL, t1.F_UPDATE_TIME " +
                 "from T_HISTORY t1 " +
                 "left join T_ANIME t2 on t1.F_LINK_ID = t2.F_ID " +
                 "where t1.F_VISIBLE = 1 " +

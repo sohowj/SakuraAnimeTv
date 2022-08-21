@@ -8,7 +8,14 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ProgressBar;
 
+import androidx.appcompat.app.AlertDialog;
+import androidx.appcompat.widget.PopupMenu;
+import androidx.coordinatorlayout.widget.CoordinatorLayout;
+import androidx.recyclerview.widget.GridLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
+
 import com.chad.library.adapter.base.BaseQuickAdapter;
+import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 
 import org.greenrobot.eventbus.Subscribe;
@@ -17,11 +24,6 @@ import org.greenrobot.eventbus.ThreadMode;
 import java.util.ArrayList;
 import java.util.List;
 
-import androidx.appcompat.app.AlertDialog;
-import androidx.appcompat.widget.PopupMenu;
-import androidx.coordinatorlayout.widget.CoordinatorLayout;
-import androidx.recyclerview.widget.GridLayoutManager;
-import androidx.recyclerview.widget.RecyclerView;
 import butterknife.BindView;
 import butterknife.ButterKnife;
 import my.project.sakuraproject.R;
@@ -168,7 +170,6 @@ public class HistoryFragment extends MyLazyFragment<HistoryContract.View, Histor
         }, 500), mRecyclerView);
         if (Utils.checkHasNavigationBar(getActivity())) mRecyclerView.setPadding(0,0,0, Utils.getNavigationBarHeight(getActivity()));
         mRecyclerView.setAdapter(adapter);
-        setRecyclerViewView();
     }
 
     public void setLoadState(boolean loadState) {
@@ -197,7 +198,8 @@ public class HistoryFragment extends MyLazyFragment<HistoryContract.View, Histor
      */
     private void showDeleteHistoryDialog(int position, String historyId, boolean isAll) {
         AlertDialog alertDialog;
-        AlertDialog.Builder builder = new AlertDialog.Builder(getActivity(), R.style.DialogStyle);
+        MaterialAlertDialogBuilder builder = new MaterialAlertDialogBuilder(getActivity(), R.style.DialogStyle);
+        builder.setTitle(Utils.getString(R.string.other_operation));
         builder.setMessage(isAll ? Utils.getString(R.string.delete_all_history) : Utils.getString(R.string.delete_single_history));
         builder.setPositiveButton(getString(R.string.page_positive), (dialog, which) -> deleteHistory(position, historyId, isAll));
         builder.setNegativeButton(getString(R.string.page_negative), (dialog, which) -> dialog.dismiss());
@@ -264,6 +266,10 @@ public class HistoryFragment extends MyLazyFragment<HistoryContract.View, Histor
             if (isMain) {
                 loading.setVisibility(View.GONE);
                 historyBeans = list;
+                if (historyBeans.size() > 0)
+                    setRecyclerViewView();
+                else
+                    setRecyclerViewEmpty();
                 setFabClick();
                 adapter.setNewData(historyBeans);
             } else
@@ -399,13 +405,6 @@ public class HistoryFragment extends MyLazyFragment<HistoryContract.View, Histor
         if (refresh.getIndex() == 2) {
             loadHistoryData();
         }
-    }
-
-    @Override
-    public void onResume() {
-        super.onResume();
-        if (isFragmentVisible && Utils.isPad())
-            setRecyclerViewView();
     }
 
     @Override
